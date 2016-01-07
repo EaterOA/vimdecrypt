@@ -1,4 +1,5 @@
 import sys
+from argparse import ArgumentParser
 
 crc32_table = []
 
@@ -16,13 +17,15 @@ def crc32(key, char):
     return crc32_table[(key ^ char) & 0xff] ^ (key >> 8)
 
 def decrypt_byte(keys):
-    temp = keys[2] | 2
+    # 16 MSB and 2 LSB do not affect temp
+    temp = (keys[2] & 0xfffc) | 3
+    # return key3
     return ((temp * (temp ^ 1)) >> 8) & 0xff
 
 def update_keys(keys, char):
     keys[0] = crc32(keys[0], char)
     keys[1] = keys[1] + (keys[0] & 0xff)
-    keys[1] = keys[1] * 134775813 + 1
+    keys[1] = (keys[1] * 134775813 + 1) & 0xffffffff
     keys[2] = crc32(keys[2], keys[1] >> 24)
 
 def decrypt(cipher, password):
@@ -38,11 +41,20 @@ def decrypt(cipher, password):
         s += i2b(temp)
     return s
 
-def main():
-    with open(sys.argv[1], 'rb') as f:
-        ciphertext = f.read()[12:]
+def parse_args():
+    parser = ArgumentParser()
+    parser.add_argument(
+        "file", help="file to decrypt")
+    parser.add_argument(
+        "password", help="password to decrypt with")
+    return parser.parse_args()
 
-    plaintext = decrypt(ciphertext, sys.argv[2].encode('utf-8'))
+def main():
+    args = parse_args()
+
+    with open(args.file, 'rb') as f:
+        ciphertext = f.read()[12:]
+    plaintext = decrypt(ciphertext, args.password.encode('utf-8'))
     print(plaintext)
 
 if __name__ == "__main__":
